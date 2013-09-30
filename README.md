@@ -1,2 +1,1 @@
-promises-cancel
-===============
+This repository is being used to work on a valid ES6 Promise sub-class that supports cancellation. It compliments https://github.com/domenic/promises-unwrapping and is built on earler ideas discussed at https://github.com/promises-aplus/cancellation-spec in Issues.
