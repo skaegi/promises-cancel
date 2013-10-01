@@ -19,19 +19,24 @@
         root.CancellablePromise = factory(root.Promise);
     }
 }(this, function(Promise) {
+    var protectedSecret = Math.random();
+
     function CancellablePromise(resolver) {
         var _resolve, _reject;
         Promise.call(this, function(resolve, reject) {
             _resolve = resolve;
             _reject = reject;
         });
+        var _this = this;
         var _then = this.then;
         var called = false;
-        var canceler;
-        // ideally protected
-        Object.defineProperty(this, "_canceler", {
-            set: function(value) {
-                canceler = value;
+        var calledCancellable = false;
+
+        // protected-ish	
+        var _protected = {};
+        Object.defineProperty(this, "_protected", {
+            value: function(secret) {
+                return secret === protectedSecret ? _protected : {};
             }
         });
 
@@ -39,10 +44,16 @@
             if (!called) {
                 called = true;
                 if (value && typeof value.then === "function") { //IsPromise
-                    canceler = value;
+                    if (typeof value.cancel !== "function") {
+                        calledCancellable = true;
+                        value.then(_resolve, _reject);
+                        return _this;
+                    } else {
+                        _protected.canceler = value;
+                    }
                 }
+                return _resolve(value);
             }
-            return _resolve(value);
         }
 
         function reject(reason) {
@@ -52,7 +63,6 @@
             return _reject(reason);
         }
 
-        var _this = this;
         this.then = function(onResolve, onReject, onProgress) {
             var derived;
 
@@ -60,30 +70,35 @@
                 return function() {
                     var result = f.apply(null, arguments);
                     if (result && typeof result.then === "function") { //IsPromise
-                        derived._canceler = result; //ideally protected access
+                        derived._protected(protectedSecret).canceler = result;
                     }
                     return result;
                 };
             }
             derived = _then(wrap(onResolve), wrap(onReject), onProgress);
-            derived._canceler = _this; //ideally protected access
+            derived._protected(protectedSecret).canceler = _this;
             var derivedCancel = derived.cancel;
             derived.cancel = setTimeout.bind(null, derivedCancel, 0);
             return derived;
         };
         this.cancel = function() {
+            var canceler = _protected.canceler;
             if (canceler && typeof canceler.cancel === "function") {
                 canceler.cancel();
             } else {
-                if (!called) {
+                if (!called || calledCancellable) {
+                    called = true;
+                    calledCancellable = false;
                     var cancelError = new Error("Cancel"); //$NON-NLS-0$
                     cancelError.name = "Cancel"; //$NON-NLS-0$
-                    reject(cancelError);
+                    _reject(cancelError);
                 }
             }
             return _this;
         };
-        resolver(resolve, reject);
+        if (typeof resolver === "function") {
+            resolver(resolve, reject);
+        }
     }
     // copy methods from Promise
     for (var prop in Promise) {

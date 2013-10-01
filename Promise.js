@@ -110,7 +110,7 @@
             return _this;
         }
 
-		// Note: then and catch should be on the protoype in a native implementation that has access to listeners and enqueue
+        // Note: then and catch should be on the protoype in a native implementation that has access to listeners and enqueue
         this.then = function(onResolve, onReject) {
             var listener = {
                 resolve: onResolve,
@@ -127,7 +127,9 @@
         this["catch"] = function(onReject) {
             _this.then(null, onReject);
         };
-        resolver(resolve, reject);
+        if (typeof resolver === "function") {
+            resolver(resolve, reject);
+        }
     }
 
     Promise.resolve = function(value) {

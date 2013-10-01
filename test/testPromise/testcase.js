@@ -448,6 +448,22 @@ define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mT
         promise.cancel();
         return promise;
     };
+    
+    tests["test Cancel.SK: Otherwise the promise is rejected with a CancellationError." + "\n" + "resolve noCancel assumption"] = function() {
+
+        var noCancel = {
+            then: function(cb) {
+                setTimeout(cb, 2000);
+            }
+        };
+
+        var promise = fulfilled(noCancel).then(assert.fail, function(reason) {
+            assert.ok(isCancellationError(reason));
+            done();
+        });
+        promise.cancel();
+        return promise;
+    };
 
     return tests;
 });
