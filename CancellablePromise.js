@@ -48,12 +48,12 @@
                         calledCancellable = true;
                         value.then(_resolve, _reject);
                         return _this;
-                    } else {
+                    } else if (value !== _this){
                         _protected.canceler = value;
                     }
                 }
-                return _resolve(value);
             }
+            return _resolve(value);
         }
 
         function reject(reason) {
