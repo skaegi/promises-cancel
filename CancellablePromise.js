@@ -22,13 +22,15 @@
     var protectedSecret = Math.random();
 
     function CancellablePromise(resolver) {
-        var _resolve, _reject;
-        Promise.call(this, function(resolve, reject) {
-            _resolve = resolve;
-            _reject = reject;
+        var resolverArgs;
+        Promise.call(this, function() {
+            resolverArgs = Array.prototype.slice.call(arguments);
         });
-        var _this = this;
+        var _resolve = resolverArgs[0];
+        var _reject = resolverArgs[1];
         var _then = this.then;
+        
+        var _this = this;
         var called = false;
         var calledCancellable = false;
 
@@ -48,7 +50,7 @@
                         calledCancellable = true;
                         value.then(_resolve, _reject);
                         return _this;
-                    } else if (value !== _this){
+                    } else if (value !== _this) {
                         _protected.canceler = value;
                     }
                 }
@@ -82,22 +84,24 @@
             return derived;
         };
         this.cancel = function() {
-            var canceler = _protected.canceler;
-            if (canceler && typeof canceler.cancel === "function") {
-                canceler.cancel();
-            } else {
-                if (!called || calledCancellable) {
+            if (!called || calledCancellable) {
+                var canceler = _protected.canceler;
+                if (canceler && typeof canceler.cancel === "function") {
+                    canceler.cancel();
+                } else {
                     called = true;
                     calledCancellable = false;
-                    var cancelError = new Error("Cancel"); //$NON-NLS-0$
-                    cancelError.name = "Cancel"; //$NON-NLS-0$
+                    var cancelError = new Error("Cancel");
+                    cancelError.name = "Cancel";
                     _reject(cancelError);
                 }
             }
             return _this;
         };
         if (typeof resolver === "function") {
-            resolver(resolve, reject);
+            resolverArgs[0] = resolve;
+            resolverArgs[1] = reject;
+            resolver.apply(null, resolverArgs);
         }
     }
     // copy methods from Promise
