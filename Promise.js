@@ -19,34 +19,28 @@
         root.Promise = factory();
     }
 }(this, function() {
-    var syncQueue = [],
-        asyncQueue = [],
+    var queue = [],
         running = false;
 
     function run() {
         var fn;
-        while ((fn = syncQueue.shift() || asyncQueue.shift())) { //empty the sync queue first!!
+        while ((fn = queue.shift())) {
             fn();
         }
         running = false;
     }
 
-    function enqueue(fn, async) {
-        var queue = async ? asyncQueue : syncQueue;
+    function enqueue(fn) {
         queue.push(fn);
         if (!running) {
             running = true;
-            if (async) {
-                setTimeout(run, 0);
-            } else {
-                run();
-            }
+            setTimeout(run, 0);
         }
     }
 
     function noReturn(fn) {
         return function() {
-            fn.apply(null, arguments);
+            fn.apply(undefined, arguments);
         };
     }
 
@@ -73,9 +67,15 @@
                 var methodName = state === "resolved" ? "resolve" : "reject";
                 if (typeof listener[methodName] === "function") {
                     try {
-                        var listenerResult = listener[methodName](result);
-                        if (listenerResult && typeof listenerResult.then === "function") {
-                            listenerResult.then(noReturn(deferred.resolve), noReturn(deferred.reject), deferred.progress);
+                        var fn = listener[methodName];
+                        var listenerResult = fn(result);
+                        var listenerThen = listenerResult && listenerResult.then;
+                        if (listenerThen && typeof listenerThen === "function") {
+                            if (listenerResult === deferred.promise) {
+                                deferred.reject(new TypeError());
+                            } else {
+                                listenerThen.call(listenerResult, noReturn(deferred.resolve), noReturn(deferred.reject));
+                            }
                         } else {
                             deferred.resolve(listenerResult);
                         }
@@ -88,7 +88,7 @@
             }
         }
 
-        function reject(error, strict) {
+        function reject(error) {
             if (!state) {
                 state = "rejected"; //$NON-NLS-0$
                 result = error;
@@ -99,8 +99,11 @@
             return _this;
         }
 
-        function resolve(value, strict) {
+        function resolve(value) {
             if (!state) {
+                if (value === _this) {
+                    return reject(new TypeError());
+                }
                 state = "resolved"; //$NON-NLS-0$
                 result = value;
                 if (listeners.length) {
@@ -119,13 +122,13 @@
             };
             listeners.push(listener);
             if (state) {
-                enqueue(notify, true); //runAsync
+                enqueue(notify);
             }
             return listener.deferred.promise;
         };
 
         this["catch"] = function(onReject) {
-            _this.then(null, onReject);
+            _this.then(undefined, onReject);
         };
         if (typeof resolver === "function") {
             resolver(resolve, reject);
@@ -168,7 +171,7 @@
             deferred.resolve(result);
         } else {
             promises.forEach(function(promise, i) {
-                promise.then(onResolve.bind(null, i), deferred.reject);
+                promise.then(onResolve.bind(undefined, i), deferred.reject);
             });
         }
         return deferred.promise;
