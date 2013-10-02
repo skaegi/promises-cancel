@@ -11,9 +11,9 @@
 /*global exports module define setTimeout*/
 
 (function(root, factory) { // UMD
-    if (typeof define === "function" && define.amd) { //$NON-NLS-0$
+    if (typeof define === "function" && define.amd) {
         define(factory);
-    } else if (typeof exports === "object") { //$NON-NLS-0$
+    } else if (typeof exports === "object") {
         module.exports = factory();
     } else {
         root.Promise = factory();
@@ -88,26 +88,47 @@
             }
         }
 
-        function reject(error) {
-            if (!state) {
-                state = "rejected"; //$NON-NLS-0$
+        function _reject(error) {
+            if (!state || state === "assumed") {
+                state = "rejected";
                 result = error;
                 if (listeners.length) {
                     enqueue(notify);
                 }
             }
+        }
+
+        function _resolve(value) {
+            if (!state || state === "assumed") {
+                state = "resolved";
+                result = value;
+                if (listeners.length) {
+                    enqueue(notify);
+                }
+            }
+        }
+
+        function reject(error) {
+            _reject(error);
             return _this;
         }
 
         function resolve(value) {
             if (!state) {
-                if (value === _this) {
-                    return reject(new TypeError());
-                }
-                state = "resolved"; //$NON-NLS-0$
-                result = value;
-                if (listeners.length) {
-                    enqueue(notify);
+                try {
+                    var valueThen = value && value.then;
+                    if (valueThen && typeof valueThen === "function") {
+                        if (value === _this) {
+                            return reject(new TypeError());
+                        }
+                        state = "assumed";
+                        result = value;
+                        valueThen.call(value, _resolve, _reject);
+                    } else {
+                        _resolve(value);
+                    }
+                } catch (e) {
+                    _reject(e);
                 }
             }
             return _this;
