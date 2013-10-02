@@ -11,9 +11,9 @@
 /*global exports module define setTimeout require*/
 
 (function(root, factory) { // UMD
-    if (typeof define === "function" && define.amd) { //$NON-NLS-0$
+    if (typeof define === "function" && define.amd) {
         define(["Promise"], factory);
-    } else if (typeof exports === "object") { //$NON-NLS-0$
+    } else if (typeof exports === "object") {
         module.exports = factory(require("Promise"));
     } else {
         root.CancellablePromise = factory(root.Promise);
@@ -38,7 +38,10 @@
         var _protected = {};
         Object.defineProperty(this, "_protected", {
             value: function(secret) {
-                return secret === protectedSecret ? _protected : {};
+                if (secret !== protectedSecret) {
+                    throw new Error("protected");
+                }
+                return _protected;
             }
         });
 
