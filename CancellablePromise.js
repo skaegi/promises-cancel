@@ -29,7 +29,7 @@
         var _resolve = resolverArgs[0];
         var _reject = resolverArgs[1];
         var _then = this.then;
-        
+
         var _this = this;
         var called = false;
         var calledCancellable = false;
@@ -65,7 +65,8 @@
             return _reject(reason);
         }
 
-        this.then = function(onResolve, onReject, onProgress) {
+        this.then = function() {
+            var thenArguments = Array.prototype.slice.call(arguments);
             var derived;
 
             function wrap(f) {
@@ -77,7 +78,12 @@
                     return result;
                 };
             }
-            derived = _then(wrap(onResolve), wrap(onReject), onProgress);
+            for (var i = 0, length = Math.min(2, thenArguments.length); i < length; i++) {
+                if (typeof thenArguments[i] === "function") {
+                    thenArguments[i] = wrap(thenArguments[i]);
+                }
+            }
+            derived = _then.apply(this, thenArguments);
             derived._protected(protectedSecret).canceler = _this;
             var derivedCancel = derived.cancel;
             derived.cancel = setTimeout.bind(null, derivedCancel, 0);
