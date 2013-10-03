@@ -60,7 +60,7 @@
                         }
                     }
                 } catch (error) {
-                    _reject(error);
+                    return _reject(error);
                 }
             }
             return _resolve(value);
@@ -86,10 +86,14 @@
                     }
                     var resultThen = result && (typeof result === "object" || typeof result === "function") && result.then;
                     if (typeof resultThen === "function") { //IsPromise
-                        result = {
-                            then: resultThen.bind(result),
-                            cancel: result.cancel
-                        };
+                        result = Object.create(result, {
+                            then: {
+                                enumerable: true,
+                                configurable: true,
+                                writable: true,
+                                value: resultThen.bind(result)
+                            }
+                        });
                         derived._protected(protectedSecret).canceler = result;
                     }
                     return result;
@@ -102,7 +106,7 @@
             }
             derived = _then.apply(_this, thenArguments);
             derived._protected(protectedSecret).canceler = _this;
-            var derivedCancel = derived.cancel;
+            var derivedCancel = derived.cancel.bind(derived);
             derived.cancel = setTimeout.bind(undefined, derivedCancel, 0);
             return derived;
         };
