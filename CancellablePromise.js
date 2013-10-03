@@ -14,7 +14,7 @@
     if (typeof define === "function" && define.amd) {
         define(["Promise"], factory);
     } else if (typeof exports === "object") {
-        module.exports = factory(require("Promise"));
+        module.exports = factory(require("./Promise.js"));
     } else {
         root.CancellablePromise = factory(root.Promise);
     }
@@ -48,14 +48,19 @@
         function resolve(value) {
             if (!called) {
                 called = true;
-                if (value && typeof value.then === "function") { //IsPromise
-                    if (typeof value.cancel !== "function") {
-                        calledCancellable = true;
-                        value.then(_resolve, _reject);
-                        return _this;
-                    } else if (value !== _this) {
-                        _protected.canceler = value;
+                try {
+                    var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
+                    if (typeof valueThen === "function") {
+                        if (typeof value.cancel !== "function") {
+                            calledCancellable = true;
+                            valueThen(_resolve, _reject);
+                            return _this;
+                        } else if (value !== _this) {
+                            _protected.canceler = value;
+                        }
                     }
+                } catch (error) {
+                    _reject(error);
                 }
             }
             return _resolve(value);
@@ -74,8 +79,17 @@
 
             function wrap(f) {
                 return function() {
-                    var result = f.apply(null, arguments);
-                    if (result && typeof result.then === "function") { //IsPromise
+                    var result = f.apply(undefined, arguments);
+                    if (result === derived) {
+                        _reject(new TypeError());
+                        return result;
+                    }
+                    var resultThen = result && (typeof result === "object" || typeof result === "function") && result.then;
+                    if (typeof resultThen === "function") { //IsPromise
+                        result = {
+                            then: resultThen.bind(result),
+                            cancel: result.cancel
+                        };
                         derived._protected(protectedSecret).canceler = result;
                     }
                     return result;
@@ -86,10 +100,10 @@
                     thenArguments[i] = wrap(thenArguments[i]);
                 }
             }
-            derived = _then.apply(this, thenArguments);
+            derived = _then.apply(_this, thenArguments);
             derived._protected(protectedSecret).canceler = _this;
             var derivedCancel = derived.cancel;
-            derived.cancel = setTimeout.bind(null, derivedCancel, 0);
+            derived.cancel = setTimeout.bind(undefined, derivedCancel, 0);
             return derived;
         };
         this.cancel = function() {
@@ -110,7 +124,7 @@
         if (typeof resolver === "function") {
             resolverArgs[0] = resolve;
             resolverArgs[1] = reject;
-            resolver.apply(null, resolverArgs);
+            resolver.apply(undefined, resolverArgs);
         }
     }
     // copy methods from Promise
