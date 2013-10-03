@@ -69,8 +69,8 @@
                     try {
                         var fn = listener[methodName];
                         var listenerResult = fn(result);
-                        var listenerThen = listenerResult && listenerResult.then;
-                        if (listenerThen && typeof listenerThen === "function") {
+                        var listenerThen = listenerResult && (typeof listenerResult === "object" || typeof listenerResult === "function") && listenerResult.then;
+                        if (typeof listenerThen === "function") {
                             if (listenerResult === deferred.promise) {
                                 deferred.reject(new TypeError());
                             } else {
@@ -89,47 +89,57 @@
         }
 
         function _reject(error) {
-            if (!state || state === "assumed") {
-                state = "rejected";
-                result = error;
-                if (listeners.length) {
-                    enqueue(notify);
-                }
+            state = "rejected";
+            result = error;
+            if (listeners.length) {
+                enqueue(notify);
             }
         }
 
         function _resolve(value) {
-            if (!state || state === "assumed") {
-                state = "resolved";
-                result = value;
-                if (listeners.length) {
-                    enqueue(notify);
-                }
-            }
-        }
+            var called = false;
 
-        function reject(error) {
-            _reject(error);
-            return _this;
+            function once(fn) {
+                return function(value) {
+                    if (!called) {
+                        called = true;
+                        fn(value);
+                    }
+                };
+            }
+
+            try {
+                var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
+                if (typeof valueThen === "function") {
+                    if (value === _this) {
+                        _reject(new TypeError());
+                    } else {
+                        state = "assumed";
+                        result = value;
+                        valueThen.call(value, once(_resolve), once(_reject));
+                    }
+                } else {
+                    state = "resolved";
+                    result = value;
+                    if (listeners.length) {
+                        enqueue(notify);
+                    }
+                }
+            } catch (error) {
+                once(_reject)(error);
+            }
         }
 
         function resolve(value) {
             if (!state) {
-                try {
-                    var valueThen = value && value.then;
-                    if (valueThen && typeof valueThen === "function") {
-                        if (value === _this) {
-                            return reject(new TypeError());
-                        }
-                        state = "assumed";
-                        result = value;
-                        valueThen.call(value, _resolve, _reject);
-                    } else {
-                        _resolve(value);
-                    }
-                } catch (e) {
-                    _reject(e);
-                }
+                _resolve(value);
+            }
+            return _this;
+        }
+        
+        function reject(error) {
+            if (!state) {
+                _reject(error);
             }
             return _this;
         }
@@ -142,7 +152,7 @@
                 deferred: getDeferred(_this.constructor)
             };
             listeners.push(listener);
-            if (state) {
+            if (state === "resolved" || state === "rejected") {
                 enqueue(notify);
             }
             return listener.deferred.promise;
