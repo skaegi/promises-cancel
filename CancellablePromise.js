@@ -19,15 +19,15 @@
         root.CancellablePromise = factory(root.Promise);
     }
 }(this, function(Promise) {
-    var protectedSecret = Math.random();
+    var protectedSecret = {};
 
     function CancellablePromise(resolver) {
-        var resolverArgs;
-        Promise.call(this, function() {
+        var resolverArgs, _resolve, _reject;
+        Promise.call(this, function(resolve, reject) {
             resolverArgs = Array.prototype.slice.call(arguments);
+            _resolve = resolve;
+            _reject = reject;
         });
-        var _resolve = resolverArgs[0];
-        var _reject = resolverArgs[1];
         var _then = this.then;
 
         var _this = this;
@@ -73,13 +73,15 @@
             return _reject(reason);
         }
 
-        this.then = function() {
-            var thenArguments = Array.prototype.slice.call(arguments);
+        this.then = function(onFulfilled, onRejected) {
             var derived;
 
-            function wrap(f) {
+            function wrap(fn) {
+                if (typeof fn !== "function") {
+                    return fn;
+                }
                 return function() {
-                    var result = f.apply(undefined, arguments);
+                    var result = fn.apply(undefined, arguments);
                     if (result === derived) {
                         _reject(new TypeError());
                         return result;
@@ -99,12 +101,7 @@
                     return result;
                 };
             }
-            for (var i = 0, length = Math.min(2, thenArguments.length); i < length; i++) {
-                if (typeof thenArguments[i] === "function") {
-                    thenArguments[i] = wrap(thenArguments[i]);
-                }
-            }
-            derived = _then.apply(_this, thenArguments);
+            derived = _then.apply(_this, [wrap(onFulfilled), wrap(onRejected)].concat(Array.prototype.slice.call(arguments, 2)));
             derived._protected(protectedSecret).canceler = _this;
             var derivedCancel = derived.cancel.bind(derived);
             derived.cancel = setTimeout.bind(undefined, derivedCancel, 0);
@@ -126,9 +123,7 @@
             return _this;
         };
         if (typeof resolver === "function") {
-            resolverArgs[0] = resolve;
-            resolverArgs[1] = reject;
-            resolver.apply(undefined, resolverArgs);
+            resolver.apply(undefined, [resolve, reject].concat(Array.prototype.slice.call(arguments, 2)));
         }
     }
     // copy methods from Promise
