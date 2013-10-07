@@ -369,6 +369,41 @@ define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mT
         return promise;
     };
 
+    tests["test Cancel.3: Otherwise the promise is rejected with a CancellationError." + "\n" + "assume pending assumption"] = function() {
+        var d = pending();
+        d.fulfill(pending().promise);
+        var promise = d.promise.then(assert.fail, function(reason) {
+            assert.ok(isCancellationError(reason));
+            done();
+        });
+        promise.cancel();
+        return promise;
+    };
+
+    tests["test Cancel.3: Otherwise the promise is rejected with a CancellationError." + "\n" + "assume fulfilled assumption"] = function() {
+        var d = pending();
+        d.fulfill(fulfilled());
+        var promise = d.promise.then(function() {
+            return pending().promise;
+        }).then(assert.fail, function(reason) {
+            assert.ok(isCancellationError(reason));
+            done();
+        });
+        promise.cancel();
+        return promise;
+    };
+
+    tests["test Cancel.3: Otherwise the promise is rejected with a CancellationError." + "\n" + "assume rejected assumption"] = function() {
+        var d = pending();
+        d.fulfill(rejected());
+        var promise = d.promise.then(assert.fail, function(reason) {
+            assert.ok(!isCancellationError(reason));
+            done();
+        });
+        promise.cancel();
+        return promise;
+    };
+
     tests["test Cancel.3: Otherwise the promise is rejected with a CancellationError." + "\n" + "then chain-fulfilled assumption"] = function() {
         var assumedCancelled = false;
         var assumed = pending().promise;
@@ -431,7 +466,7 @@ define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mT
         return promise;
     };
 
-    tests["test Cancel.SK: Otherwise the promise is rejected with a CancellationError." + "\n" + "then noCancel assumption"] = function() {
+    tests["test Cancel.3: Otherwise the promise is rejected with a CancellationError." + "\n" + "then noCancel assumption"] = function() {
 
         var noCancel = {
             then: function(cb) {
@@ -448,8 +483,8 @@ define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mT
         promise.cancel();
         return promise;
     };
-    
-    tests["test Cancel.SK: Otherwise the promise is rejected with a CancellationError." + "\n" + "resolve noCancel assumption"] = function() {
+
+    tests["test Cancel.3: Otherwise the promise is rejected with a CancellationError." + "\n" + "resolve noCancel assumption"] = function() {
 
         var noCancel = {
             then: function(cb) {
@@ -464,6 +499,30 @@ define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mT
         promise.cancel();
         return promise;
     };
+    
+    tests["The cancel logic should execute on its own stack"+ "\n" + "resolve assumption"] = function() {
 
+		var d = pending();
+		var promise = d.promise;
+		
+		promise.cancel();
+		d.resolve();
+		
+		return promise.then(done, assert.fail);
+    };
+    
+    tests["The cancel logic should execute on its own stack"+ "\n" + "reject assumption"] = function() {
+
+		var d = pending();
+		var promise = d.promise;
+		
+		promise.cancel();
+		d.reject();
+		
+		return promise.then(assert.fail, function(reason) {
+            assert.ok(!isCancellationError(reason));
+            done();
+        });
+    };
     return tests;
 });

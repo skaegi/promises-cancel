@@ -48,19 +48,22 @@
         function resolve(value) {
             if (!called) {
                 called = true;
-                try {
-                    var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
-                    if (typeof valueThen === "function") {
-                        if (typeof value.cancel !== "function") {
-                            calledCancellable = true;
-                            valueThen(_resolve, _reject);
-                            return _this;
-                        } else if (value !== _this) {
-                            _protected.canceler = value;
+                if (value !== _this) {
+                    try {
+                        var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
+                        if (typeof valueThen === "function") {
+                            var valueCancel = value.cancel;
+                            if (typeof valueCancel === "function") {
+                                _protected.parentCancel = valueCancel.bind(value);
+                            } else {
+                                calledCancellable = true;
+                                valueThen(_resolve, _reject);
+                                return _this;
+                            }
                         }
+                    } catch (error) {
+                        return _reject(error);
                     }
-                } catch (error) {
-                    return _reject(error);
                 }
             }
             return _resolve(value);
@@ -73,6 +76,18 @@
             return _reject(reason);
         }
 
+        function cancel() {
+            if (_protected.parentCancel) {
+                _protected.parentCancel.call(undefined);
+            } else if (!called || calledCancellable) {
+                calledCancellable = false;
+                called = true;
+                var cancelError = new Error("Cancel");
+                cancelError.name = "Cancel";
+                _reject(cancelError);
+            }
+        }
+
         this.then = function(onFulfilled, onRejected) {
             var derived;
 
@@ -82,46 +97,24 @@
                 }
                 return function() {
                     var result = fn.apply(undefined, arguments);
-                    if (result === derived) {
-                        _reject(new TypeError());
-                        return result;
-                    }
-                    var resultThen = result && (typeof result === "object" || typeof result === "function") && result.then;
-                    if (typeof resultThen === "function") { //IsPromise
-                        result = Object.create(result, {
-                            then: {
-                                enumerable: true,
-                                configurable: true,
-                                writable: true,
-                                value: resultThen.bind(result)
-                            }
-                        });
-                        derived._protected(protectedSecret).canceler = result;
+                    var resultCancel = result && result.cancel;
+                    if (typeof resultCancel === "function") {
+                        derived._protected(protectedSecret).parentCancel = resultCancel.bind(result);
+                    } else {
+                        delete derived._protected(protectedSecret).parentCancel;
                     }
                     return result;
                 };
             }
             derived = _then.apply(_this, [wrap(onFulfilled), wrap(onRejected)].concat(Array.prototype.slice.call(arguments, 2)));
-            derived._protected(protectedSecret).canceler = _this;
-            var derivedCancel = derived.cancel.bind(derived);
-            derived.cancel = setTimeout.bind(undefined, derivedCancel, 0);
+            derived._protected(protectedSecret).parentCancel = _this.cancel.bind(_this);
             return derived;
         };
         this.cancel = function() {
-            if (!called || calledCancellable) {
-                var canceler = _protected.canceler;
-                if (canceler && typeof canceler.cancel === "function") {
-                    canceler.cancel();
-                } else {
-                    called = true;
-                    calledCancellable = false;
-                    var cancelError = new Error("Cancel");
-                    cancelError.name = "Cancel";
-                    _reject(cancelError);
-                }
-            }
+            setTimeout(cancel, 0);
             return _this;
         };
+
         if (typeof resolver === "function") {
             resolver.apply(undefined, [resolve, reject].concat(Array.prototype.slice.call(arguments, 2)));
         }
