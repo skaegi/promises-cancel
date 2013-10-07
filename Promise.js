@@ -64,7 +64,7 @@
             var listener;
             while ((listener = listeners.shift())) {
                 var deferred = listener.deferred;
-                var methodName = state === "resolved" ? "resolve" : "reject";
+                var methodName = state === "fulfilled" ? "resolve" : "reject";
                 if (typeof listener[methodName] === "function") {
                     try {
                         var fn = listener[methodName];
@@ -119,7 +119,7 @@
                         valueThen.call(value, once(_resolve), once(_reject));
                     }
                 } else {
-                    state = "resolved";
+                    state = "fulfilled";
                     result = value;
                     if (listeners.length) {
                         enqueue(notify);
@@ -145,14 +145,14 @@
         }
 
         // Note: then and catch should be on the protoype in a native implementation that has access to listeners and enqueue
-        this.then = function(onResolve, onReject) {
+        this.then = function(onFulfill, onReject) {
             var listener = {
-                resolve: onResolve,
+                resolve: onFulfill,
                 reject: onReject,
                 deferred: getDeferred(_this.constructor)
             };
             listeners.push(listener);
-            if (state === "resolved" || state === "rejected") {
+            if (state === "fulfilled" || state === "rejected") {
                 enqueue(notify);
             }
             return listener.deferred.promise;
