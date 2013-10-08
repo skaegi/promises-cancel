@@ -32,8 +32,6 @@
 
         var _this = this;
         var called = false;
-        var calledCancellable = false;
-
         // protected-ish	
         var _protected = {};
         Object.defineProperty(this, "_protected", {
@@ -46,49 +44,46 @@
         });
 
         function resolve(value) {
-            function wrap(fn) {
-                return function() {
-                    calledCancellable = false;
-                    return fn.apply(undefined, arguments);
-                };
-            }
             if (!called) {
                 called = true;
-                if (value !== _this) {
-                    try {
-                        var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
-                        if (typeof valueThen === "function") {
-                            var valueCancel = value.cancel;
-                            if (typeof valueCancel === "function") {
-                                _protected.parentCancel = valueCancel.bind(value);
-                            } else {
-                                calledCancellable = true;
-                                valueThen(wrap(_resolve), wrap(_reject));
-                                return _this;
-                            }
+                try {
+                    var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
+                    var valueCancel = value && value.cancel;
+                    if (typeof valueThen === "function") {
+                        if (typeof valueCancel === "function") {
+                            _protected.parentCancel = valueCancel.bind(value);
+                        } else {
+                            value = new CancellablePromise(function(resolve, reject) {
+                                try {
+                                    valueThen(resolve, reject);
+                                } catch (error) {
+                                    reject(error);
+                                }
+                            });
+                            _protected.parentCancel = value.cancel.bind(value);
                         }
-                    } catch (error) {
-                        return _reject(error);
+                    } else {
+                        delete _protected.parentCancel;
                     }
+
+                } catch (error) {
+                    return _reject(error);
                 }
-                return _resolve(value);
             }
-            return _this;         
+            return _resolve(value);
         }
 
         function reject(reason) {
             if (!called) {
                 called = true;
-                return _reject(reason);
             }
-            return _this;        
+            return _reject(reason);
         }
 
         function cancel() {
             if (_protected.parentCancel) {
                 _protected.parentCancel.call(undefined);
-            } else if (!called || calledCancellable) {
-                calledCancellable = false;
+            } else if (!called) {
                 called = true;
                 var cancelError = new Error("Cancel");
                 cancelError.name = "Cancel";
