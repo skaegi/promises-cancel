@@ -210,11 +210,10 @@ define(["orion/assert", "orion/test", "ProgressPromise"], function(assert, mTest
             assert.ok(value === sentinel);
             d.fulfill();
         });
-        d.progress(sentinel);
-        return promise;
+        return ProgressPromise.all([promise, d.progress(sentinel)]);
     };
-    
-    tests["test send progress - assumed"] = function() {
+
+    tests["test send progress - assumed pending"] = function() {
         var d = pending();
         var a = pending();
         setTimeout(a.reject.bind(undefined, "timeout"), 200);
@@ -222,24 +221,109 @@ define(["orion/assert", "orion/test", "ProgressPromise"], function(assert, mTest
             assert.ok(value === sentinel);
             a.fulfill();
         });
-        d.progress(sentinel);
-        return promise;
+        return ProgressPromise.all([promise, d.progress(sentinel)]);
     };
 
-    tests["test send progress - fulfilled"] = function() {
+    tests["test send progress - assumed fulfilled"] = function() {
         var d = pending();
-        var promise = d.promise.then(function(){}, assert.fail, assert.fail);
-        d.fulfill();
-        d.progress();
+        var a = fulfilled();
+        var promise = d.fulfill(a).then(function() {}, assert.fail, assert.fail);
         return ProgressPromise.all([promise, d.progress()]);
     };
 
     tests["test send progress - rejected"] = function() {
         var d = pending();
-        var promise = d.promise.then(assert.fail, function(){}, assert.fail);
+        var promise = d.promise.then(assert.fail, function() {}, assert.fail);
         d.reject();
+        return ProgressPromise.all([promise, d.progress()]);
+    };
+
+    tests["test send progress - assumed rejected"] = function() {
+        var d = pending();
+        var a = rejected();
+        var promise = d.fulfill(a).then(assert.fail, function() {}, assert.fail);
         d.progress();
         return ProgressPromise.all([promise, d.progress()]);
+    };
+
+    tests["test send progress - throw on progress"] = function() {
+        var d = pending();
+        setTimeout(d.reject.bind(undefined, "timeout"), 200);
+        var promise = d.promise.then(null, null, function(value) {
+            assert.ok(value === sentinel);
+            d.fulfill();
+            throw "x";
+        });
+        return ProgressPromise.all([promise, d.progress(sentinel).then(assert.fail, function() {})]);
+    };
+
+
+    tests["test send progress - progress returns fulfilled"] = function() {
+        var d = pending();
+        setTimeout(d.reject.bind(undefined, "timeout"), 200);
+        var promise = d.promise.then(null, null, function(value) {
+            assert.ok(value === sentinel);
+            return ProgressPromise.resolve("test");
+        }).then(null, null, function(value) {
+            d.fulfill();
+            if (value !== "test") {
+                assert.fail();
+            }
+        });
+        return ProgressPromise.all([promise, d.progress(sentinel)]);
+    };
+
+    tests["test send progress - progress returns rejected"] = function() {
+        var d = pending();
+        setTimeout(d.reject.bind(undefined, "timeout"), 200);
+        var promise = d.promise.then(null, null, function(value) {
+            assert.ok(value === sentinel);
+            return ProgressPromise.reject("test");
+        });
+        return ProgressPromise.all([promise, d.progress(sentinel).then(assert.fail, function(value) {
+            d.fulfill();
+            if (value !== "test") {
+                assert.fail();
+            }
+        })]);
+    };
+    
+        tests["test send progress - progress returns rejected StopProgressPropagation"] = function() {
+        var d = pending();
+        setTimeout(d.reject.bind(undefined, "timeout"), 200);
+        var promise = d.promise.then(null, null, function(value) {
+            assert.ok(value === sentinel);
+            var progressError = new Error("StopProgressPropagation");
+            progressError.name = "StopProgressPropagation";
+            return ProgressPromise.reject(progressError);
+        }).then(null, null, assert.fail);
+        return ProgressPromise.all([promise, d.progress(sentinel).then(function() {
+            d.fulfill();
+        })]);
+    };
+
+    tests["test send progress - rejected promise on progress"] = function() {
+        var d = pending();
+        setTimeout(d.reject.bind(undefined, "timeout"), 200);
+        var promise = d.promise.then(null, null, function(value) {
+            assert.ok(value === sentinel);
+            d.fulfill();
+            throw "x";
+        });
+        return ProgressPromise.all([promise, d.progress(sentinel).then(assert.fail, function() {})]);
+    };
+
+    tests["test send progress - throw StopProgressPropagation on progress"] = function() {
+        var d = pending();
+        setTimeout(d.reject.bind(undefined, "timeout"), 200);
+        var promise = d.promise.then(null, null, function(value) {
+            assert.ok(value === sentinel);
+            d.fulfill();
+            var progressError = new Error("StopProgressPropagation");
+            progressError.name = "StopProgressPropagation";
+            throw progressError;
+        });
+        return ProgressPromise.all([promise, d.progress(sentinel)]);
     };
 
     return tests;

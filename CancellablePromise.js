@@ -71,15 +71,17 @@
                         return _reject(error);
                     }
                 }
+                return _resolve(value);
             }
-            return _resolve(value);
+            return _this;         
         }
 
         function reject(reason) {
             if (!called) {
                 called = true;
+                return _reject(reason);
             }
-            return _reject(reason);
+            return _this;        
         }
 
         function cancel() {

@@ -20,6 +20,11 @@
     }
 }(this, function(Promise) {
     var protectedSecret = {};
+    var RESOLVED = Promise.resolve();
+
+    function isStopProgressPropagationError(error) {
+        return error instanceof Error && error.name === "StopProgressPropagation";
+    }
 
     function ProgressPromise(resolver) {
         var resolverArgs, _resolve, _reject;
@@ -34,7 +39,9 @@
         var called = false;
         var calledProgressable = false;
         // protected-ish	
-        var _protected = {progressListeners:[]};
+        var _protected = {
+            progressListeners: []
+        };
         Object.defineProperty(this, "_protected", {
             value: function(secret) {
                 if (secret !== protectedSecret) {
@@ -43,10 +50,14 @@
                 return _protected;
             }
         });
-        
-        
 
         function resolve(value) {
+            function wrap(fn) {
+                return function() {
+                    calledProgressable = false;
+                    return fn.apply(undefined, arguments);
+                };
+            }
             if (!called) {
                 called = true;
                 if (value !== _this) {
@@ -54,44 +65,73 @@
                         var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
                         if (typeof valueThen === "function") {
                             calledProgressable = true;
-                            valueThen(_resolve, _reject);
+                            valueThen(wrap(_resolve), wrap(_reject));
                             return _this;
                         }
                     } catch (error) {
-                        return _reject(error);
+                        return wrap(_reject)(error);
                     }
                 }
+                return _resolve(value);
             }
-            return _resolve(value);
+            return _this;
         }
 
         function reject(reason) {
             if (!called) {
                 called = true;
+                return _reject(reason);
             }
-            return _reject(reason);
+            return _this;
+        }
+
+        function _progress(value) {
+            if (!called || calledProgressable) {
+                var progressPromises = [];
+                var progressError;
+                _protected.progressListeners.forEach(function(listener) {
+                    try {
+                        var result = listener.onProgress ? listener.onProgress(value) : value;
+                        var resultThen = result && (typeof result === "object" || typeof result === "function") && result.then;
+                        if (typeof resultThen === "function") {
+                            progressPromises.push(resultThen.call(undefined, listener.progress).then(null, function(error) {
+                                if (!isStopProgressPropagationError(error)) {
+                                    progressError = progressError || error;
+                                }
+                            }));
+                        } else {
+                            progressPromises.push(listener.progress(result).then(null, function(error) {
+                                progressError = progressError || error;
+                            }));
+                        }
+                    } catch (error) {
+                        if (!isStopProgressPropagationError(error)) {
+                            progressError = progressError || error;
+                        }
+                    }
+                });
+                return Promise.all(progressPromises).then(function() {
+                    if (progressError) {
+                        throw progressError;
+                    }
+                });
+            }
+            return RESOLVED;
         }
 
         function progress(value) {
             if (!called || calledProgressable) {
-                var progressPromises = [];
-                _protected.progressListeners.forEach(function(listener) {
-                    var progress = listener.promise._protected(protectedSecret).progress;
-                    try {
-                        var result = listener.onProgress(value);
-                        var resultThen = result && (typeof result === "object" || typeof result === "function") && result.then;
-                        if (typeof resultThen === "function") {
-                            progressPromises.push(resultThen.call(undefined, progress));
-                        } else {
-                            progressPromises.push(progress.call(undefined, result));
-                        }
-                    } catch (error) {
-                        progressPromises.push(Promise.reject(error));
-                    }
+                var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
+                if (typeof valueThen === "function") {
+                    return valueThen(progress);
+                }
+                return new Promise(function(resolve, reject) {
+                    setTimeout(function() {
+                        _progress(value).then(resolve, reject);
+                    }, 0);
                 });
-                return Promise.all(progressPromises);
             }
-            return Promise.resolve();
+            return RESOLVED;
         }
         _protected.progress = progress;
 
@@ -99,6 +139,7 @@
             var listener = {
                 promise: _then.apply(_this, arguments)
             };
+            listener.progress = listener.promise._protected(protectedSecret).progress;
             if (typeof onProgress === "function") {
                 listener.onProgress = onProgress;
             }
