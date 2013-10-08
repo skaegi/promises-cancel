@@ -46,6 +46,12 @@
         });
 
         function resolve(value) {
+            function wrap(fn) {
+                return function() {
+                    calledCancellable = false;
+                    return fn.apply(undefined, arguments);
+                };
+            }
             if (!called) {
                 called = true;
                 if (value !== _this) {
@@ -57,7 +63,7 @@
                                 _protected.parentCancel = valueCancel.bind(value);
                             } else {
                                 calledCancellable = true;
-                                valueThen(_resolve, _reject);
+                                valueThen(wrap(_resolve), wrap(_reject));
                                 return _this;
                             }
                         }
