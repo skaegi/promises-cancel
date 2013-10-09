@@ -27,21 +27,27 @@
     }
 
     function ProgressPromise(resolver) {
-        var resolverArgs, _resolve, _reject;
+        var resolverArgs, _resolve, _reject, settled = false;
         Promise.call(this, function(resolve, reject) {
+            function wrap(fn) {
+                return function() {
+                    settled = true;
+                    return fn.apply(undefined, arguments);
+                };
+            }
+
             resolverArgs = Array.prototype.slice.call(arguments);
-            _resolve = resolve;
-            _reject = reject;
+            _resolve = wrap(resolve);
+            _reject = wrap(reject);
         });
         var _then = this.then;
 
         var _this = this;
         var called = false;
+        var progressListeners = [];
         var calledProgressable = false;
         // protected-ish	
-        var _protected = {
-            progressListeners: []
-        };
+        var _protected = {};
         Object.defineProperty(this, "_protected", {
             value: function(secret) {
                 if (secret !== protectedSecret) {
@@ -52,24 +58,17 @@
         });
 
         function resolve(value) {
-            function wrap(fn) {
-                return function() {
-                    calledProgressable = false;
-                    return fn.apply(undefined, arguments);
-                };
-            }
             if (!called) {
                 called = true;
                 if (value !== _this) {
                     try {
                         var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
                         if (typeof valueThen === "function") {
-                            calledProgressable = true;
-                            valueThen(wrap(_resolve), wrap(_reject));
+                            valueThen(_resolve, _reject);
                             return _this;
                         }
                     } catch (error) {
-                        return wrap(_reject)(error);
+                        return _reject(error);
                     }
                 }
                 return _resolve(value);
@@ -89,7 +88,7 @@
             if (!called || calledProgressable) {
                 var progressPromises = [];
                 var progressError;
-                _protected.progressListeners.forEach(function(listener) {
+                progressListeners.forEach(function(listener) {
                     try {
                         var result = listener.onProgress ? listener.onProgress(value) : value;
                         var resultThen = result && (typeof result === "object" || typeof result === "function") && result.then;
@@ -120,7 +119,7 @@
         }
 
         function progress(value) {
-            if (!called || calledProgressable) {
+            if (!settled) {
                 var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
                 if (typeof valueThen === "function") {
                     return valueThen(progress);
@@ -143,7 +142,7 @@
             if (typeof onProgress === "function") {
                 listener.onProgress = onProgress;
             }
-            _protected.progressListeners.push(listener);
+            progressListeners.push(listener);
             return listener.promise;
         };
         if (typeof resolver === "function") {

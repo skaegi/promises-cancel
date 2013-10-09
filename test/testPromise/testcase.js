@@ -11,10 +11,10 @@
 
 /*global define setTimeout console*/
 
-define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mTest, CancellablePromise) {
+define(["orion/assert", "orion/test", "CancellablePromise"], function(assert, mTest, TestPromise) {
 
     function Deferred() {
-        this.promise = new CancellablePromise(function(resolve, reject) {
+        this.promise = new TestPromise(function(resolve, reject) {
             this.resolve = resolve;
             this.reject = reject;
         }.bind(this));
