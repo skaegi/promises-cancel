@@ -46,13 +46,12 @@
         function resolve(value) {
             if (!called) {
                 called = true;
+                delete _protected.parentCancel;
                 try {
                     var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
                     var valueCancel = value && value.cancel;
                     if (typeof valueThen === "function") {
-                        if (typeof valueCancel === "function") {
-                            _protected.parentCancel = valueCancel.bind(value);
-                        } else {
+                        if (typeof valueCancel !== "function") {
                             value = new CancellablePromise(function(resolve, reject) {
                                 try {
                                     valueThen(resolve, reject);
@@ -60,10 +59,9 @@
                                     reject(error);
                                 }
                             });
-                            _protected.parentCancel = value.cancel.bind(value);
+                            valueCancel = value.cancel;
                         }
-                    } else {
-                        delete _protected.parentCancel;
+                        _protected.parentCancel = valueCancel.bind(value);
                     }
 
                 } catch (error) {
@@ -76,13 +74,16 @@
         function reject(reason) {
             if (!called) {
                 called = true;
+                delete _protected.parentCancel;
             }
             return _reject(reason);
         }
 
         function cancel() {
-            if (_protected.parentCancel) {
-                _protected.parentCancel.call(undefined);
+            var parentCancel = _protected.parentCancel;
+            if (parentCancel) {
+                delete _protected.parentCancel;
+                parentCancel();
             } else if (!called) {
                 called = true;
                 var cancelError = new Error("Cancel");
