@@ -49,8 +49,8 @@
                 delete _protected.parentCancel;
                 try {
                     var valueThen = value && (typeof value === "object" || typeof value === "function") && value.then;
-                    var valueCancel = value && value.cancel;
                     if (typeof valueThen === "function") {
+                        var valueCancel = value && value.cancel;
                         if (typeof valueCancel !== "function") {
                             value = new CancellablePromise(function(resolve, reject) {
                                 try {
