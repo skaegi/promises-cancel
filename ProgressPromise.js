@@ -138,7 +138,7 @@
             var listener = {
                 promise: _then.apply(_this, arguments)
             };
-            listener.progress = listener.promise._protected(protectedSecret).progress;
+            listener.onProgress = listener.promise._protected(protectedSecret).progress;
             if (typeof onProgress === "function") {
                 listener.onProgress = onProgress;
             }
